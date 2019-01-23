@@ -203,20 +203,26 @@ sub assign {
 }
 
 sub process_section_change {
+	my $section = $_[0] // $currentSection;
+
 	# We just encountered a section change.
 	# If our patch contains some assignments for the current section
 	# that haven't been applied yet, print them now:
 	
 	my @openAssignments = grep {
 			my $k = $_->{'key'};
-			! is_assigned_explicitly($currentSection, $k) &&
-			! is_assigned_in_comment($currentSection, $k) &&
-			! is_applied($currentSection, $k)
-		} @{$patch{$currentSection}};
+			! is_assigned_explicitly($section, $k) &&
+			! is_assigned_in_comment($section, $k) &&
+			! is_applied($section, $k)
+		} @{$patch{$section}};
 
 	return if ! @openAssignments;
 
 	print "\n";
+	if (!defined $currentSection || $section ne $currentSection) {
+		$currentSection = $section;
+		print "[$section]\n";
+	}
 	print assign %$_ foreach @openAssignments;
 	print "\n";
 }
@@ -278,6 +284,7 @@ sub patch_input {
 	# eof
 	process_key_change() if defined $currentKey;
 	process_section_change() if defined $currentSection;
+	process_section_change($_) foreach keys %patch;
 }
 
 

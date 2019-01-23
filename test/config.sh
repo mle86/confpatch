@@ -70,3 +70,19 @@ count_assignments () {
 	find_assignments "$@" | wc -l
 }
 
+# filter_section SECTION [INPUT=<stdin>]
+filter_section () {
+	local section="$1"
+	local input=
+	if [ "$#" -ge 2 ]; then
+		input="$2"
+	else
+		input="$(cat)"
+	fi
+
+	perl -e '
+		my ($section, $input) = @ARGV;
+		print "$1\n" while ($input =~ m/^\s*\[$section\][^\r\n]*\n(.*?)(?:^\s*\[|\Z)/smg);
+		' "$section" "$input"
+}
+
