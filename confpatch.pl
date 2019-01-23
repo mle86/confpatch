@@ -11,6 +11,7 @@ require 'dumpvar.pl';
 use constant {
 	DEFAULT_COMMENT_CHAR => '#',
 	DEFAULT_ASSIGN_CHAR => '=',
+	NO_SECTION => "__NO_SECTION__\x00",
 };
 
 sub Syntax {
@@ -24,7 +25,7 @@ options:
   ${M1}-c${M0}|${M1}--comment-char${M0} ${Mu}C${M0}        Line comment prefix.  Default: ${M1}%s${M0}
   ${M1}-g${M0}|${M1}--assign-char${M0} ${Mu}C${M0}         Key-value assignment character.  Default: ${M1}%s${M0}
   ${M1}-d${M0}|${M1}--default-section${M0} ${Mu}NAME${M0}  Default section name for settings without section.
-  ${M1}-D${M0}|${M1}--no-default-section${M0}    Fail on settings with section.
+  ${M1}-D${M0}|${M1}--empty-default-section${M0} Support files without explicit sections.
 
 EOT
 	exit($_[0] // 0);
@@ -37,7 +38,7 @@ my $inPlace;
 my $outputFile;
 my $commentChar = DEFAULT_COMMENT_CHAR;
 my $assignChar = DEFAULT_ASSIGN_CHAR;
-my $defaultSection = undef;
+my $defaultSection = NO_SECTION;
 
 GetOptions(
 	'i|in-place'      => sub{ $inPlace = 1; undef $outputFile; },
@@ -45,7 +46,7 @@ GetOptions(
 	'c|comment-char=s' => sub{ $commentChar = $_[1]; },
 	'g|assign-char=s' => sub{ $assignChar = $_[1]; },
 	'd|default-section=s' => sub{ $defaultSection = $_[1]; },
-	'D|no-default-section' => sub{ undef $defaultSection; },
+	'D|empty-default-section' => sub{ $defaultSection = NO_SECTION; },
 	'h|help' => sub { Syntax(); },
 );
 
@@ -86,7 +87,7 @@ sub read_patch_file {
 	my ($filename) = @_;
 	my %patch;
 	my $comment;
-	my $section;
+	my $section = $defaultSection;
 
 	open PFH, "< $filename" or die "could not open patch file $filename: $!";
 	while (defined($_ = <PFH>)) {
@@ -146,10 +147,13 @@ my %explicitAssignments = find_assignments(\@input, $re_assign);
 # This var contains a list of all keys with a commented-out assignment in the input.
 # (section => [key, ...], ...)
 my %commentedAssignments = find_assignments(\@input, $re_assigncomment);
+# This var contains a list of all sections explicitly named in the input.
+# (section => 1, ...)
+#my %inputSections = find_sections(\@input);
 
 sub find_assignments {
 	my ($input, $re) = @_;
-	my $section;
+	my $section = $defaultSection;
 	my %list = ();
 	foreach (@$input) {
 		if (m/$re_section/) { $section = $+{'sec'}; }
@@ -157,6 +161,19 @@ sub find_assignments {
 	}
 	return %list;
 }
+
+#sub find_sections {
+#	my ($input) = @_;
+#	my %list = ();
+#	foreach (@$input) {
+#		if (m/$re_section/) { $list{ $+{'sec'} } = 1; }
+#	}
+#	return %list;
+#}
+
+#sub has_section ($) {
+#	exists($inputSections{$_[0]})
+#}
 
 sub is_assigned_explicitly ($$) {
 	my ($section, $key) = @_;
@@ -186,7 +203,8 @@ if ($outputFile ne '-') {
 	select OUT;
 }
 
-my $currentSection;
+my $initial = 1;
+my $currentSection = $defaultSection;
 my $currentKey;
 patch_input(\@input, \%patch);
 select STDOUT;
@@ -204,6 +222,16 @@ sub assign {
 
 sub process_section_change {
 	my $section = $_[0] // $currentSection;
+
+	if ($initial) {
+		# This is the end of the initial sectionless area.
+		# The only reason why we would want to add something _here_
+		# is if we need to add values to the unnamed (!) default section.
+		# (If the default section is known to have a name, we can safely add it at eof
+		#  if it's not contained in the input anyways.)
+		$initial = 0;
+		if ($section ne NO_SECTION) { return }
+	}
 
 	# We just encountered a section change.
 	# If our patch contains some assignments for the current section
