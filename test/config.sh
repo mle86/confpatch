@@ -86,3 +86,7 @@ filter_section () {
 		' "$section" "$input"
 }
 
+checksum () {
+	md5sum -b "$1" | cut -d' ' -f1
+}
+
