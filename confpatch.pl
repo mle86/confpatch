@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use Getopt::Long qw(:config no_getopt_compat bundling);
 use Scalar::Util qw(openhandle);
+use File::Copy;
 use warnings;
 use strict;
 require 'dumpvar.pl';
@@ -11,6 +12,8 @@ require 'dumpvar.pl';
 use constant {
 	DEFAULT_COMMENT_CHAR => '#',
 	DEFAULT_ASSIGN_CHAR => '=',
+	DEFAULT_BACKUP_SUFFIX => '~',
+	DEFAULT_BACKUP => 0,
 	DELETE_MARKER => '@DELETE',
 		# works only if immediately followed by an assignment or assignment comment,
 		# preferrably an empty assignment for easier reading
@@ -29,6 +32,8 @@ options:
   ${M1}-g${M0}|${M1}--assign-char${M0} ${Mu}C${M0}         Key-value assignment character.  Default: ${M1}%s${M0}
   ${M1}-d${M0}|${M1}--default-section${M0} ${Mu}NAME${M0}  Default section name for settings without section.
   ${M1}-D${M0}|${M1}--empty-default-section${M0} Support files without explicit sections.
+  ${M1}-b${M0}|${M1}--backup${M0}                Make a backup file if output file already exists.
+  ${M1}-B${M0}|${M1}--no-backup${M0}             Write no backup file (default).
 
 EOT
 	exit($_[0] // 0);
@@ -39,6 +44,8 @@ EOT
 
 my $inPlace;
 my $outputFile;
+my $makeBackup = DEFAULT_BACKUP;
+my $backupSuffix = DEFAULT_BACKUP_SUFFIX;
 my $commentChar = DEFAULT_COMMENT_CHAR;
 my $assignChar = DEFAULT_ASSIGN_CHAR;
 my $defaultSection = NO_SECTION;
@@ -47,10 +54,13 @@ GetOptions(
 	'i|in-place'      => sub{ $inPlace = 1; undef $outputFile; },
 	'o|output-file=s' => sub{ $inPlace = 0; $outputFile = $_[1]; },
 	'c|comment-char=s' => sub{ $commentChar = $_[1]; },
+	'b|backup' => sub{ $makeBackup = 1; },
+	'B|no-backup' => sub{ $makeBackup = 0; },
 	'g|assign-char=s' => sub{ $assignChar = $_[1]; },
 	'd|default-section=s' => sub{ $defaultSection = $_[1]; },
 	'D|empty-default-section' => sub{ $defaultSection = NO_SECTION; },
 	'h|help' => sub { Syntax(); },
+	# TODO: set backup suffix
 );
 
 if ((!$inPlace && !defined $outputFile) || ($inPlace && defined $outputFile)) {
@@ -341,6 +351,12 @@ sub patch_input {
 	process_section_change($_) foreach keys %patch;
 }
 
+
+if ($makeBackup && $outputFile ne '-' && -f $outputFile) {
+	# TODO: only write backup if we actually changed anything
+	my $backupFile = $outputFile . $backupSuffix;
+	copy($outputFile, $backupFile) or die "failed to write backup file: $!";
+}
 
 
 if (defined $outputBuffer) {
