@@ -11,6 +11,9 @@ require 'dumpvar.pl';
 use constant {
 	DEFAULT_COMMENT_CHAR => '#',
 	DEFAULT_ASSIGN_CHAR => '=',
+	DELETE_MARKER => '@DELETE',
+		# works only if immediately followed by an assignment or assignment comment,
+		# preferrably an empty assignment for easier reading
 	NO_SECTION => "__NO_SECTION__\x00",
 };
 
@@ -74,11 +77,12 @@ if ($inPlace) {
 
 ## Prepare matching:  ###########################################################
 
-my $re_commentline = qr/^\s*${commentChar}/;
+my $re_commentline = qr/^\s*${commentChar}(?:\s*(?<comment>.+))?/;
 my $re_blankline = qr/^\s*$/;
 my $re_section = qr/^\s*\[(?<sec>[^\]]*)\]\s*(?:${commentChar}.*)?$/;
 my $re_assign = qr/^(?<vk>\s*(?!$commentChar)(?<k>\S[^$assignChar]*?)\s*)${assignChar}(?<vv>.*)$/;
-my $re_assigncomment = qr/^\s*${commentChar}\s*(?<k>\S[^$assignChar]*?)\s*${assignChar}/;
+my $re_assigncomment = qr/^(?<ck>\s*${commentChar}\s*(?<k>\S[^$assignChar]*?)\s*)${assignChar}(?<vv>.*)$/;
+my $re_delete = '^\\s*' . DELETE_MARKER . '\\b';
 
 
 ## Read patch input:  ###########################################################
@@ -87,12 +91,31 @@ sub read_patch_file {
 	my ($filename) = @_;
 	my %patch;
 	my $comment;
+	my $doDelete;
 	my $section = $defaultSection;
 
 	open PFH, "< $filename" or die "could not open patch file $filename: $!";
 	while (defined($_ = <PFH>)) {
 
+		# Usually assignment comments are treated just like comments --
+		# why would you even put something like that in a patch file?
+		# But they work with the @DELETE marker (so that the patch output is itself a valid patch).
+		if ($doDelete && m/$re_assigncomment/) {
+			my ($commentedKey, $key, $verbatimValue) = ($+{'ck'}, $+{'k'}, $+{'vv'});
+			push @{ $patch{$section} }, {
+				key => $key,
+				verbatimKey => $commentedKey,  # already contains the comment char
+				verbatimValue => $verbatimValue,
+				comment => $comment,
+				doDelete => $doDelete,
+			};
+			undef $comment;
+			undef $doDelete;
+			next;
+		}
+
 		if (m/$re_commentline/) {
+			if ($+{'comment'} =~ m/$re_delete/) { $doDelete = 1 }
 			$comment .= $_;
 			next;
 		}
@@ -102,16 +125,19 @@ sub read_patch_file {
 			my ($verbatimKey, $key, $verbatimValue) = ($+{'vk'}, $+{'k'}, $+{'vv'});
 			push @{ $patch{$section} }, {
 				key => $key,
-				verbatimKey => $verbatimKey,
+				verbatimKey => ($doDelete) ? $commentChar.$verbatimKey : $verbatimKey,
 				verbatimValue => $verbatimValue,
 				comment => $comment,
+				doDelete => $doDelete,
 			};
 			undef $comment;
+			undef $doDelete;
 			next;
 		}
 
 		# anything else clears the comment:
 		undef $comment;
+		undef $doDelete;
 
 		next if m/$re_blankline/;  # ignore blank lines
 
@@ -127,7 +153,7 @@ sub read_patch_file {
 	return %patch;
 }
 
-# ( section => [ {key, verbatimKey, verbatimValue, comment}, ... ], ... )
+# ( section => [ {key, verbatimKey, verbatimValue, comment, doDelete}, ... ], ... )
 my %patch = read_patch_file($patchFile);
 
 # ( section => [ key, ... ], ... )
