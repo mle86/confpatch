@@ -4,7 +4,6 @@ use Scalar::Util qw(openhandle);
 use File::Copy;
 use warnings;
 use strict;
-require 'dumpvar.pl';
 
 
 ## Defaults:  ##################################################################

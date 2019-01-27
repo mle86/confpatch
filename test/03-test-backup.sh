@@ -10,7 +10,6 @@ backupFile="${targetFile}~"
 hook_cleanup () { rm -f -- "$targetFile" "$backupFile"; }
 [ ! -e "$backupFile" ] || fail "Backup file '$backupFile' already exists!?"
 cp -- "$SAMPLE_DEFAULT" "$targetFile"
-originalChecksum="$(checksum "$targetFile")"
 
 
 assertCmd "$PATCH -b -i '$targetFile' '$SAMPLES/my999.patch.ini'"
