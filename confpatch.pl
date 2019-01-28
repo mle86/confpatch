@@ -68,19 +68,19 @@ GetOptions(
 );
 
 if ((!$inPlace && !defined $outputFile) || ($inPlace && defined $outputFile)) {
-	printf STDERR "Need either option -i or -o\n";
+	printf STDERR "%s: Need either option -i or -o\n", PROGNAME;
 	exit 1;
 }
 
 my $inputFile = $ARGV[0];
 if (!defined $inputFile) {
-	printf STDERR "No INPUTFILE\n";
+	printf STDERR "%s: No INPUTFILE\n", PROGNAME;
 	exit 1;
 }
 
 my $patchFile = $ARGV[1];
 if (!defined $patchFile) {
-	printf STDERR "No PATCHFILE\n";
+	printf STDERR "%s: No PATCHFILE\n", PROGNAME;
 	exit 1;
 }
 
@@ -127,7 +127,7 @@ sub read_patch_file {
 	my $doDelete;
 	my $section = $defaultSection;
 
-	open PFH, "< $filename" or die "could not open patch file $filename: $!";
+	open PFH, "< $filename" or die PROGNAME . ": could not open patch file $filename: $!";
 	while (defined($_ = <PFH>)) {
 
 		# Usually assignment comments are treated just like comments --
@@ -196,7 +196,7 @@ my %applied = ();
 ## Read and prepare source file:  ##############################################
 
 open IN, "< ${inputFile}"
-	or die "could not open '$inputFile' for reading: $!";
+	or die PROGNAME . ": could not open '$inputFile' for reading: $!";
 my @input = <IN>;
 close IN;
 
@@ -382,7 +382,7 @@ sub patch_input {
 my $backupFile;
 if ($makeBackup && $outputFile ne '-' && -f $outputFile && $changes) {
 	$backupFile = $outputFile . $backupSuffix;
-	copy($outputFile, $backupFile) or die "failed to write backup file: $!";
+	copy($outputFile, $backupFile) or die PROGNAME . ": failed to write backup file: $!";
 }
 
 
@@ -390,7 +390,7 @@ if (defined $outputBuffer) {
 	# patch_input() wrote something into this var.
 	# Print it all at once into the output file:
 	open OUT, "> ${outputFile}"
-		or die "could not open '$outputFile' for writing: $!";
+		or die PROGNAME . ": could not open '$outputFile' for writing: $!";
 	print OUT $outputBuffer;
 	close OUT;
 } else {
