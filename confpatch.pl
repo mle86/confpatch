@@ -228,6 +228,8 @@ sub is_applied ($$) {
 
 ## Process and patch source file:  #############################################
 
+my $changes = 0;
+
 # If outputFile is "-", the patch function can simply print to STDOUT.
 # But if outputFile is a real filename, the patch function must write to $output
 # because we may be doing an in-place edit which would mess up our input.
@@ -288,6 +290,7 @@ sub process_section_change {
 	}
 	print assign %$_ foreach @openAssignments;
 	print "\n";
+	$changes++;
 }
 
 sub process_key_change {
@@ -300,6 +303,7 @@ sub process_key_change {
 
 	print assign(%$assignment);
 	undef $currentKey;
+	$changes++;
 }
 
 sub find_assignment {
@@ -323,6 +327,7 @@ sub patch_input {
 				# Comment-out the existing line, print replacement afterwards:
 				print $commentChar . $_;
 				print assign(%$targetAssignment);
+				$changes++;
 			}
 
 		} elsif (m/$re_assigncomment/ && !is_assigned_explicitly($currentSection, $+{'k'})) {
@@ -350,9 +355,7 @@ sub patch_input {
 	process_section_change($_) foreach keys %patch;
 }
 
-
-if ($makeBackup && $outputFile ne '-' && -f $outputFile) {
-	# TODO: only write backup if we actually changed anything
+if ($makeBackup && $outputFile ne '-' && -f $outputFile && $changes) {
 	my $backupFile = $outputFile . $backupSuffix;
 	copy($outputFile, $backupFile) or die "failed to write backup file: $!";
 }
