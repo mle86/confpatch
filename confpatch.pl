@@ -2,6 +2,7 @@
 use Getopt::Long qw(:config no_getopt_compat bundling);
 use Scalar::Util qw(openhandle);
 use File::Copy;
+use File::Basename;
 use warnings;
 use strict;
 
@@ -9,6 +10,7 @@ use strict;
 ## Defaults:  ##################################################################
 
 use constant {
+	PROGNAME => basename($0),
 	DEFAULT_COMMENT_CHAR => '#',
 	DEFAULT_ASSIGN_CHAR => '=',
 	DEFAULT_BACKUP_SUFFIX => '~',
@@ -33,6 +35,7 @@ options:
   ${M1}-D${M0}|${M1}--empty-default-section${M0} Support files without explicit sections.
   ${M1}-b${M0}|${M1}--backup${M0}                Make a backup file if output file already exists.
   ${M1}-B${M0}|${M1}--no-backup${M0}             Write no backup file (default).
+  ${M1}-v${M0}|${M1}--verbose${M0}               More output.
 
 EOT
 	exit($_[0] // 0);
@@ -48,6 +51,7 @@ my $backupSuffix = DEFAULT_BACKUP_SUFFIX;
 my $commentChar = DEFAULT_COMMENT_CHAR;
 my $assignChar = DEFAULT_ASSIGN_CHAR;
 my $defaultSection = NO_SECTION;
+my $verbose;
 
 GetOptions(
 	'i|in-place'      => sub{ $inPlace = 1; undef $outputFile; },
@@ -58,6 +62,7 @@ GetOptions(
 	'g|assign-char=s' => sub{ $assignChar = $_[1]; },
 	'd|default-section=s' => sub{ $defaultSection = $_[1]; },
 	'D|empty-default-section' => sub{ $defaultSection = NO_SECTION; },
+	'v|verbose' => sub { $verbose = 1; },
 	'h|help' => sub { Syntax(); },
 	# TODO: set backup suffix
 );
@@ -81,6 +86,25 @@ if (!defined $patchFile) {
 
 if ($inPlace) {
 	$outputFile = $inputFile;
+}
+
+
+## Helpers:  ####################################################################
+
+sub verbose ($@) {
+	verbose_(PROGNAME . ': ' . shift, @_);
+}
+
+sub verbose_ ($@) {
+	return unless $verbose;
+	printf STDERR (shift, @_);
+}
+
+sub F ($;$) {
+	my $filename = $_[0];
+	return ($filename eq '-')
+		? ($_[1] // 'STDIN')
+		: $filename
 }
 
 
@@ -355,8 +379,9 @@ sub patch_input {
 	process_section_change($_) foreach keys %patch;
 }
 
+my $backupFile;
 if ($makeBackup && $outputFile ne '-' && -f $outputFile && $changes) {
-	my $backupFile = $outputFile . $backupSuffix;
+	$backupFile = $outputFile . $backupSuffix;
 	copy($outputFile, $backupFile) or die "failed to write backup file: $!";
 }
 
@@ -370,6 +395,16 @@ if (defined $outputBuffer) {
 	close OUT;
 } else {
 	# patch_input() probably wrote to STDOUT directly.
+}
+
+if ($changes) {
+	verbose ("patched '%s'", F($inputFile));
+	verbose_(", target '%s'", F($outputFile, 'STDOUT'))  if ($inputFile ne $outputFile);
+	verbose_(", backup '%s'", $backupFile)  if defined $backupFile;
+	verbose_("\n");
+} else {
+	# no changes to INFILE|INPLACEFILE
+	verbose("no changes to %s\n", F($inputFile));
 }
 
 exit;
