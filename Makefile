@@ -2,6 +2,7 @@
 
 .PHONY : all install test clean
 
+all:
 
 test:
 	git submodule update --init test/framework/
