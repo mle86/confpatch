@@ -1,0 +1,4 @@
+.gitattributes	export-ignore
+.gitmodules	export-ignore
+.gitignore	export-ignore
+/test		export-ignore
